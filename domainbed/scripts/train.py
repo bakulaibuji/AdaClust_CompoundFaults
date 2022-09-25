@@ -54,6 +54,8 @@ if __name__ == "__main__":
     parser.add_argument('--clust_step', type=int, default=None, help='step to perform clustering')
     parser.add_argument('--num_clusters', type=int, default=None, help='Number of clusters')
 
+    parser.add_argument('--num_workers', type=int, default=2, help='Number of workers')
+
     args = parser.parse_args()
 
     # If we ever want to implement checkpointing, just persist these values
@@ -151,16 +153,17 @@ if __name__ == "__main__":
     len_test_data = len(test_data)
 
     # Loaders to perform clustering
+    num_workers = args.num_workers
     if "AdaClust" in args.algorithm:
         train_loader = FastDataLoader_no_shuffle(
             dataset=train_data,
             batch_size=128,
-            num_workers=8,
+            num_workers=num_workers,
         )
         test_loader = FastDataLoader_no_shuffle(
             dataset=test_data,
             batch_size=128,
-            num_workers=8,
+            num_workers=num_workers,
         )
 
     # DomainBed dataloaders
@@ -170,7 +173,7 @@ if __name__ == "__main__":
             dataset=torch.utils.data.Subset(train_data, idx),
             weights=None,
             batch_size=hparams["batch_size"],
-            num_workers=8,
+            num_workers=num_workers,
         )
         for idx in train_idx_split
     ]
@@ -181,7 +184,7 @@ if __name__ == "__main__":
         FastDataLoader(
             dataset=torch.utils.data.Subset(test_data, idx),
             batch_size=64,
-            num_workers=8,
+            num_workers=num_workers,
         )
         for idx in test_idx_split
     ]
