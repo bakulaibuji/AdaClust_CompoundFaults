@@ -38,6 +38,8 @@ def getParameters():
     parser.add_argument('--test_envs', type=int, nargs='+', default=[0])
 
     # ------------- HyperParameters -----------------#
+    parser.add_argument('--batch_size', type=int, default=32,
+                        help='batch size')
     parser.add_argument('--hparams_json', type=str,
                         help='JSON-serialized hparams dict')
     parser.add_argument('--hparams_seed', type=int, default=0,
@@ -209,12 +211,12 @@ if __name__ == "__main__":
     if "AdaClust" in args.algorithm:
         train_loader = FastDataLoader_no_shuffle(
             dataset=train_data,
-            batch_size=128,
+            batch_size=args.batch_size,
             num_workers=num_workers,
         )
         test_loader = FastDataLoader_no_shuffle(
             dataset=test_data,
-            batch_size=128,
+            batch_size=args.batch_size,
             num_workers=num_workers,
         )
 
@@ -235,7 +237,7 @@ if __name__ == "__main__":
     eval_loaders = [
         FastDataLoader(
             dataset=torch.utils.data.Subset(test_data, idx),
-            batch_size=64,
+            batch_size=args.batch_size,
             num_workers=num_workers,
         )
         for idx in test_idx_split
