@@ -296,8 +296,9 @@ if __name__ == "__main__":
 
         with torch.no_grad():
             # Get features and labels
-            train_features, train_labels = get_features(train_loader, algorithm, len_train_data, 128, device)
-            test_features, test_labels = get_features(test_loader, algorithm, len_test_data, 128, device)
+            train_features, train_labels = get_features(train_loader, algorithm, len_train_data, args.batch_size,
+                                                        device)
+            test_features, test_labels = get_features(test_loader, algorithm, len_test_data, args.batch_size, device)
             train_labels = torch.Tensor(train_labels).type(torch.LongTensor)
             test_labels = torch.Tensor(test_labels).type(torch.LongTensor)
 
