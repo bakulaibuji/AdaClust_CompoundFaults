@@ -5,47 +5,55 @@ import collections
 import json
 import os
 import random
+import socket
 import sys
 import time
-import uuid
-
-import numpy as np
 import PIL
-import torch
-import torchvision
 import torch.utils.data
+import torchvision
+import numpy as np
 
+from pathlib import Path
+
+from domainbed import algorithms
 from domainbed import datasets
 from domainbed import hparams_registry
-from domainbed import algorithms
 from domainbed.lib import misc
 from domainbed.lib.fast_data_loader import InfiniteDataLoader, FastDataLoader, FastDataLoader_no_shuffle
 
-if __name__ == "__main__":
+
+def getParameters():
     parser = argparse.ArgumentParser(description='Domain generalization')
-    parser.add_argument('--data_dir', type=str)
-    parser.add_argument('--dataset', type=str, default="RotatedMNIST")
-    parser.add_argument('--algorithm', type=str, default="ERM")
-    parser.add_argument('--task', type=str, default="domain_generalization",
-        choices=["domain_generalization", "domain_adaptation"])
-    parser.add_argument('--hparams', type=str,
-        help='JSON-serialized hparams dict')
-    parser.add_argument('--hparams_seed', type=int, default=0,
-        help='Seed for random hparams (0 means "default hparams")')
-    parser.add_argument('--trial_seed', type=int, default=0,
-        help='Trial number (used for seeding split_dataset and '
-        'random_hparams).')
-    parser.add_argument('--seed', type=int, default=0,
-        help='Seed for everything else')
-    parser.add_argument('--steps', type=int, default=None,
-        help='Number of steps. Default is dataset-dependent.')
-    parser.add_argument('--checkpoint_freq', type=int, default=None,
-        help='Checkpoint every N steps. Default is dataset-dependent.')
-    parser.add_argument('--test_envs', type=int, nargs='+', default=[0])
+
+    # ------------- Parameters for System -----------------#
+    parser.add_argument('--data_dir', type=str, default="Not Setting")
     parser.add_argument('--output_dir', type=str, default="train_output")
+    parser.add_argument('--num_workers', type=int, default=2, help='Number of workers')
+
+    # ------------- Parameters for Task -----------------#
+    parser.add_argument('--dataset', type=str, default="TerraIncognita")
+    parser.add_argument('--algorithm', type=str, default="AdaClust")
+    parser.add_argument('--task', type=str, default="domain_generalization",
+                        choices=["domain_generalization", "domain_adaptation"])
+    parser.add_argument('--test_envs', type=int, nargs='+', default=[0])
+
+    # ------------- HyperParameters -----------------#
+    parser.add_argument('--hparams_json', type=str,
+                        help='JSON-serialized hparams dict')
+    parser.add_argument('--hparams_seed', type=int, default=0,
+                        help='Seed for random hparams (0 means "default hparams")')
+    parser.add_argument('--trial_seed', type=int, default=0,
+                        help='Trial number (used for seeding split_dataset and '
+                             'random_hparams).')
+    parser.add_argument('--seed', type=int, default=0,
+                        help='Seed for everything else')
+    parser.add_argument('--steps', type=int, default=None,
+                        help='Number of steps. Default is dataset-dependent.')
+    parser.add_argument('--checkpoint_freq', type=int, default=None,
+                        help='Checkpoint every N steps. Default is dataset-dependent.')
     parser.add_argument('--holdout_fraction', type=float, default=0.2)
     parser.add_argument('--uda_holdout_fraction', type=float, default=0,
-        help="For domain adaptation, % of test to use unlabeled for training.")
+                        help="For domain adaptation, % of test to use unlabeled for training.")
     parser.add_argument('--skip_model_save', action='store_true')
     parser.add_argument('--save_model_every_checkpoint', action='store_true')
 
@@ -54,19 +62,71 @@ if __name__ == "__main__":
     parser.add_argument('--clust_step', type=int, default=None, help='step to perform clustering')
     parser.add_argument('--num_clusters', type=int, default=None, help='Number of clusters')
 
-    parser.add_argument('--num_workers', type=int, default=2, help='Number of workers')
-
     args = parser.parse_args()
 
-    # If we ever want to implement checkpointing, just persist these values
-    # every once in a while, and then load them from disk here.
-    start_step = 0
-    algorithm_dict = None
+    # ------------- Default Setting -----------------#
+    hostname = socket.gethostname()
+    if args.data_dir == "Not Setting":
+        if hostname == "THINKPAD-X1E":
+            args.data_dir = "D:\\datasets"
+        elif hostname == "huangteam-112":
+            args.data_dir = "/home/huangteam/wangyuxiang/data"
+        elif hostname == "wang":
+            args.data_dir = "E:\\Dataset"
+        else:
+            raise Exception("Unknown computer host, unable to set data directory")
+    args.data_dir = Path(args.data_dir)
+    if not args.data_dir.exists():
+        raise Exception("dataset directory is not existed!")
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    sys.stdout = misc.Tee(os.path.join(args.output_dir, 'out.txt'))
-    sys.stderr = misc.Tee(os.path.join(args.output_dir, 'err.txt'))
+    if args.output_dir == "Not Setting":
+        if hostname == "THINKPAD-X1E":
+            args.output_dir = "train_output"
+        elif hostname == "huangteam-112":
+            args.output_dir = "train_output"
+        elif hostname == "wang":
+            args.output_dir = "train_output"
+        else:
+            raise Exception("Unknown computer host, unable to set data directory")
+    args.output_dir = args.data_dir / (args.dataset + "_" + args.output_dir)
 
+    if not args.output_dir.exists():
+        args.output_dir.mkdir()
+
+    sys.stdout = misc.Tee(args.output_dir / 'out.txt')
+    sys.stderr = misc.Tee(args.output_dir / 'err.txt')
+
+    if torch.cuda.is_available():
+        args.device = "cuda"
+    else:
+        args.device = "cpu"
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    # ------------- Load HyperParameters -----------------#
+    from .helpers import get_hparam
+
+    if args.hparams_seed == 0:
+        args.hparams = hparams_registry.default_hparams(args.algorithm, args.dataset)
+    else:
+        args.hparams = hparams_registry.random_hparams(args.algorithm, args.dataset,
+                                                       misc.seed_hash(args.hparams_seed, args.trial_seed))
+    args.hparams = get_hparam(args.hparams, args.hparams_seed)  # To fix hparams for each hparams_seed, else comment out
+    if args.hparams_json:
+        args.hparams.update(json.loads(args.hparams_json))
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
+    # Set flag for AdaClust specific operations
+    if "AdaClust" in args.algorithm:
+        args.cluster = True
+    else:
+        args.cluster = False
+
+    # ------------- Print Some Information -----------------#
     print("Environment:")
     print("\tPython: {}".format(sys.version.split(" ")[0]))
     print("\tPyTorch: {}".format(torch.__version__))
@@ -80,43 +140,42 @@ if __name__ == "__main__":
     for k, v in sorted(vars(args).items()):
         print('\t{}: {}'.format(k, v))
 
-    if args.hparams_seed == 0:
-        hparams = hparams_registry.default_hparams(args.algorithm, args.dataset)
-    else:
-        hparams = hparams_registry.random_hparams(args.algorithm, args.dataset,
-            misc.seed_hash(args.hparams_seed, args.trial_seed))
-
-    from .helpers import get_hparam
-    hparams = get_hparam(hparams, args.hparams_seed) # To fix hparams for each hparams_seed, else comment out
-
-    if args.hparams:
-        hparams.update(json.loads(args.hparams))
-
     print('HParams:')
-    for k, v in sorted(hparams.items()):
+    for k, v in sorted(args.hparams.items()):
         print('\t{}: {}'.format(k, v))
 
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    return args
 
-    if torch.cuda.is_available():
-        device = "cuda"
-    else:
-        device = "cpu"
+
+if __name__ == "__main__":
+    # ------------- STEP1: Set Default Parameters Before Training -----------------#
+    args = getParameters()
+    hparams = args.hparams
+    device = args.device
+    cluster = args.cluster
+
+    # If we ever want to implement checkpointing, just persist these values
+    # every once in a while, and then load them from disk here.
+    start_step = 0
+    algorithm_dict = None
 
     if args.dataset in vars(datasets):
         dataset = vars(datasets)[args.dataset](args.data_dir,
-            args.test_envs, hparams)
+                                               args.test_envs, hparams)
     else:
         raise NotImplementedError
 
+    # Set number of clusters
     if "AdaClust" in args.algorithm:
-        num_clusters = args.num_clusters or hparams["num_clusters"] * dataset.num_classes # Set number of clusters
+        num_clusters = args.num_clusters or hparams["num_clusters"] * dataset.num_classes
         print("NUM CLUSTERS: ", num_clusters)
 
+    # ------------- STEP2: Get Train and Test DataLoader -----------------#
+    from .helpers import *
+    from .clustering import Faiss_Clustering
+    from .preprocess import *
+
+    # Split dataset into training and testing part
     test_data_sep = []
     train_data_sep = []
     eval_loader_names = []
@@ -138,21 +197,14 @@ if __name__ == "__main__":
         eval_loader_names += ["env{}_out".format(env_i)]
         if env_i not in args.test_envs:
             train_data_sep.append(in_)
-            train_domain_labels.extend([env_i]*len(in_))
+            train_domain_labels.extend([env_i] * len(in_))
 
-    if args.task == "domain_adaptation" and len(uda_splits) == 0:
-        raise ValueError("Not enough unlabeled samples for domain adaptation.")
-
-    from .helpers import *
-    from .clustering import Faiss_Clustering
-    from .preprocess import *
-
-    train_data = MyDataloader(train_data_sep) # Concat train data
-    test_data = MyDataloader(test_data_sep) # Concat test data
+    train_data = MyDataloader(train_data_sep)  # Concat train data
+    test_data = MyDataloader(test_data_sep)  # Concat test data
     len_train_data = len(train_data)
     len_test_data = len(test_data)
 
-    # Loaders to perform clustering
+    # Generate DataLoaders to Perform Clustering
     num_workers = args.num_workers
     if "AdaClust" in args.algorithm:
         train_loader = FastDataLoader_no_shuffle(
@@ -166,7 +218,7 @@ if __name__ == "__main__":
             num_workers=num_workers,
         )
 
-    # DomainBed dataloaders
+    # Generate DataLoaders for DomainBed
     train_idx_split = get_data_split_idx(train_data_sep)
     train_loaders = [
         InfiniteDataLoader(
@@ -189,44 +241,40 @@ if __name__ == "__main__":
         for idx in test_idx_split
     ]
 
-
+    # ------------- STEP3: Prepare Algorithm and Scheduled Clustering -----------------#
+    # Get Algorithm
     algorithm_class = algorithms.get_algorithm_class(args.algorithm)
     algorithm = algorithm_class(dataset.input_shape, dataset.num_classes,
-        len(dataset) - len(args.test_envs), hparams)
-
+                                len(dataset) - len(args.test_envs), hparams)
     if algorithm_dict is not None:
         algorithm.load_state_dict(algorithm_dict)
-
     algorithm.to(device)
-
-    # Set flag for AdaClust specific operations
-    if "AdaClust" in args.algorithm:
-        cluster = True
-    else:
-        cluster = False
 
     checkpoint_vals = collections.defaultdict(lambda: [])
 
     steps_per_epoch = int(len(train_data) / hparams["batch_size"])
     print(f"Number of steps per epoch: {steps_per_epoch}")
     n_steps = args.steps or dataset.N_STEPS
-    checkpoint_freq = args.checkpoint_freq or dataset.CHECKPOINT_FREQ 
+    checkpoint_freq = args.checkpoint_freq or dataset.CHECKPOINT_FREQ
     epochs = int(n_steps / steps_per_epoch)
 
     if args.sched:
-        algorithm.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(algorithm.optimizer, T_max=n_steps) # Initialize scheduler
+        algorithm.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(algorithm.optimizer,
+                                                                         T_max=n_steps)  # Initialize scheduler
 
     # Set clustering schedule
     if cluster:
         cluster_step = args.clust_step
         if args.clust_step is None:
-            cluster_step = steps_per_epoch * hparams["clust_epoch"] # Cluster every hparams["clust_epoch"] epochs
-        cluster_step = [(x*cluster_step) for x in range(n_steps) if (x*cluster_step)<= n_steps]
-        if hparams["clust_epoch"]==0: # cluster every 2**n epochs (0, 1, 2, 4, 8, 16, ...)
-            cluster_step = [((2 ** x)*steps_per_epoch) for x in range(epochs) if (2**x)<= epochs] # store the steps at which clustering take place
+            cluster_step = steps_per_epoch * hparams["clust_epoch"]  # Cluster every hparams["clust_epoch"] epochs
+        cluster_step = [(x * cluster_step) for x in range(n_steps) if (x * cluster_step) <= n_steps]
+        if hparams["clust_epoch"] == 0:  # cluster every 2**n epochs (0, 1, 2, 4, 8, 16, ...)
+            cluster_step = [((2 ** x) * steps_per_epoch) for x in range(epochs) if
+                            (2 ** x) <= epochs]  # store the steps at which clustering take place
         print(f"Cluster every {cluster_step} steps")
     else:
-        cluster_step = [-1] # dummy value
+        cluster_step = [-1]  # dummy value
+
 
     def save_checkpoint(filename):
         if args.skip_model_save:
@@ -239,9 +287,9 @@ if __name__ == "__main__":
             "model_hparams": hparams,
             "model_dict": algorithm.state_dict()
         }
-        torch.save(save_dict, os.path.join(args.output_dir, filename))
+        torch.save(save_dict, args.output_dir / filename)
 
-    
+
     def return_centroids(algorithm, step):
 
         with torch.no_grad():
@@ -253,7 +301,7 @@ if __name__ == "__main__":
 
         # Clustering on Train Data
         if args.no_pca:
-            train_features2 = train_features # if no PCA
+            train_features2 = train_features  # if no PCA
         else:
             train_features_pca = np.asarray(train_features)
             pca = PCA(hparams["pca_dim"])
@@ -291,7 +339,6 @@ if __name__ == "__main__":
                 test_centroids[indx] = torch.Tensor(test_features[indx].mean(axis=0))
 
         return train_centroids, test_centroids, exp_var
-
 
 
     last_results_keys = None
@@ -335,14 +382,14 @@ if __name__ == "__main__":
             evals = zip(eval_loader_names, eval_loaders)
             for i, (name, loader) in enumerate(evals):
                 acc = misc.accuracy(algorithm, loader, None, device, test_centroids)
-                results[name+'_acc'] = acc
+                results[name + '_acc'] = acc
 
             results_keys = sorted(results.keys())
             if results_keys != last_results_keys:
                 misc.print_row(results_keys, colwidth=12)
                 last_results_keys = results_keys
             misc.print_row([results[key] for key in results_keys],
-                colwidth=12)
+                           colwidth=12)
 
             results.update({
                 'hparams': hparams,

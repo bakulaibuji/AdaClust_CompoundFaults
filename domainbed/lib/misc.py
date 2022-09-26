@@ -25,9 +25,10 @@ def l2_between_dicts(dict_1, dict_2):
     dict_1_values = [dict_1[key] for key in sorted(dict_1.keys())]
     dict_2_values = [dict_2[key] for key in sorted(dict_1.keys())]
     return (
-        torch.cat(tuple([t.view(-1) for t in dict_1_values])) -
-        torch.cat(tuple([t.view(-1) for t in dict_2_values]))
+            torch.cat(tuple([t.view(-1) for t in dict_1_values])) -
+            torch.cat(tuple([t.view(-1) for t in dict_2_values]))
     ).pow(2).mean()
+
 
 class MovingAverage:
 
@@ -59,7 +60,6 @@ class MovingAverage:
         return ema_dict_data
 
 
-
 def make_weights_for_balanced_classes(dataset):
     counts = Counter()
     classes = []
@@ -80,21 +80,25 @@ def make_weights_for_balanced_classes(dataset):
 
     return weights
 
+
 def pdb():
     sys.stdout = sys.__stdout__
     import pdb
     print("Launching PDB, enter 'n' to step to parent function.")
     pdb.set_trace()
 
+
 def seed_hash(*args):
     """
     Derive an integer hash from all args, for use as a random seed.
     """
     args_str = str(args)
-    return int(hashlib.md5(args_str.encode("utf-8")).hexdigest(), 16) % (2**31)
+    return int(hashlib.md5(args_str.encode("utf-8")).hexdigest(), 16) % (2 ** 31)
+
 
 def print_separator():
-    print("="*80)
+    print("=" * 80)
+
 
 def print_row(row, colwidth=10, latex=False):
     if latex:
@@ -108,18 +112,24 @@ def print_row(row, colwidth=10, latex=False):
         if np.issubdtype(type(x), np.floating):
             x = "{:.10f}".format(x)
         return str(x).ljust(colwidth)[:colwidth]
+
     print(sep.join([format_val(x) for x in row]), end_)
+
 
 class _SplitDataset(torch.utils.data.Dataset):
     """Used by split_dataset"""
+
     def __init__(self, underlying_dataset, keys):
         super(_SplitDataset, self).__init__()
         self.underlying_dataset = underlying_dataset
         self.keys = keys
+
     def __getitem__(self, key):
         return self.underlying_dataset[self.keys[key]]
+
     def __len__(self):
         return len(self.keys)
+
 
 def split_dataset(dataset, n, seed=0):
     """
@@ -127,12 +137,13 @@ def split_dataset(dataset, n, seed=0):
     dataset, with n datapoints in the first dataset and the rest in the last,
     using the given random seed
     """
-    assert(n <= len(dataset))
+    assert (n <= len(dataset))
     keys = list(range(len(dataset)))
     np.random.RandomState(seed).shuffle(keys)
     keys_1 = keys[:n]
     keys_2 = keys[n:]
     return _SplitDataset(dataset, keys_1), _SplitDataset(dataset, keys_2)
+
 
 def random_pairs_of_minibatches(minibatches):
     perm = torch.randperm(len(minibatches)).tolist()
@@ -150,6 +161,7 @@ def random_pairs_of_minibatches(minibatches):
 
     return pairs
 
+
 def accuracy(network, loader, weights, device, test_centroids=None):
     correct = 0
     total = 0
@@ -165,7 +177,7 @@ def accuracy(network, loader, weights, device, test_centroids=None):
                 if weights is None:
                     batch_weights = torch.ones(len(x))
                 else:
-                    batch_weights = weights[weights_offset : weights_offset + len(x)]
+                    batch_weights = weights[weights_offset: weights_offset + len(x)]
                     weights_offset += len(x)
                 batch_weights = batch_weights.to(device)
                 if p.size(1) == 1:
@@ -183,7 +195,7 @@ def accuracy(network, loader, weights, device, test_centroids=None):
                 if weights is None:
                     batch_weights = torch.ones(len(x))
                 else:
-                    batch_weights = weights[weights_offset : weights_offset + len(x)]
+                    batch_weights = weights[weights_offset: weights_offset + len(x)]
                     weights_offset += len(x)
                 batch_weights = batch_weights.to(device)
                 if p.size(1) == 1:
@@ -195,6 +207,7 @@ def accuracy(network, loader, weights, device, test_centroids=None):
     network.train()
 
     return correct / total
+
 
 class Tee:
     def __init__(self, fname, mode="a"):
@@ -209,6 +222,7 @@ class Tee:
     def flush(self):
         self.stdout.flush()
         self.file.flush()
+
 
 class ParamDict(OrderedDict):
     """Code adapted from https://github.com/Alok/rl_implementations/tree/master/reptile.
@@ -245,7 +259,8 @@ class ParamDict(OrderedDict):
 
     def __truediv__(self, other):
         return self._prototype(other, operator.truediv)
-        
+
+
 def to_row(row, colwidth=10, latex=False):
     """Convert value list to row string"""
     if latex:
@@ -265,4 +280,3 @@ def to_row(row, colwidth=10, latex=False):
 
 def timestamp(fmt="%y%m%d_%H-%M-%S"):
     return datetime.now().strftime(fmt)
-    

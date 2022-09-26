@@ -9,6 +9,7 @@ from torch.autograd import Variable
 import copy
 import numpy as np
 from collections import defaultdict, OrderedDict
+
 try:
     from backpack import backpack, extend
     from backpack.extensions import BatchGrad
@@ -19,7 +20,6 @@ from domainbed import networks
 from domainbed.lib.misc import (
     random_pairs_of_minibatches, ParamDict, MovingAverage, l2_between_dicts
 )
-
 
 ALGORITHMS = [
     'ERM',
@@ -49,11 +49,13 @@ ALGORITHMS = [
     'IB-IRM',
 ]
 
+
 def get_algorithm_class(algorithm_name):
     """Return the algorithm class with the given name."""
     if algorithm_name not in globals():
         raise NotImplementedError("Algorithm not found: {}".format(algorithm_name))
     return globals()[algorithm_name]
+
 
 class Algorithm(torch.nn.Module):
     """
@@ -62,6 +64,7 @@ class Algorithm(torch.nn.Module):
     - update()
     - predict()
     """
+
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(Algorithm, self).__init__()
         self.hparams = hparams
@@ -78,6 +81,7 @@ class Algorithm(torch.nn.Module):
 
     def predict(self, x):
         raise NotImplementedError
+
 
 class ERM(Algorithm):
     """
@@ -101,8 +105,8 @@ class ERM(Algorithm):
         )
 
     def update(self, minibatches, unlabeled=None):
-        all_x = torch.cat([x for x,y in minibatches])
-        all_y = torch.cat([y for x,y in minibatches])
+        all_x = torch.cat([x for x, y in minibatches])
+        all_y = torch.cat([y for x, y in minibatches])
         loss = F.cross_entropy(self.predict(all_x), all_y)
 
         self.optimizer.zero_grad()
@@ -170,7 +174,7 @@ class Fish(Algorithm):
 
     def create_clone(self, device):
         self.network_inner = networks.WholeFish(self.input_shape, self.num_classes, self.hparams,
-                                            weights=self.network.state_dict()).to(device)
+                                                weights=self.network.state_dict()).to(device)
         self.optimizer_inner = torch.optim.Adam(
             self.network_inner.parameters(),
             lr=self.hparams["lr"],
@@ -210,6 +214,7 @@ class Fish(Algorithm):
 
 class ARM(ERM):
     """ Adaptive Risk Minimization (ARM) """
+
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         original_input_shape = input_shape
         input_shape = (1 + original_input_shape[0],) + original_input_shape[1:]
@@ -240,7 +245,7 @@ class AbstractDANN(Algorithm):
                  hparams, conditional, class_balance):
 
         super(AbstractDANN, self).__init__(input_shape, num_classes, num_domains,
-                                  hparams)
+                                           hparams)
 
         self.register_buffer('update_count', torch.tensor([0]))
         self.conditional = conditional
@@ -253,21 +258,21 @@ class AbstractDANN(Algorithm):
             num_classes,
             self.hparams['nonlinear_classifier'])
         self.discriminator = networks.MLP(self.featurizer.n_outputs,
-            num_domains, self.hparams)
+                                          num_domains, self.hparams)
         self.class_embeddings = nn.Embedding(num_classes,
-            self.featurizer.n_outputs)
+                                             self.featurizer.n_outputs)
 
         # Optimizers
         self.disc_opt = torch.optim.Adam(
             (list(self.discriminator.parameters()) +
-                list(self.class_embeddings.parameters())),
+             list(self.class_embeddings.parameters())),
             lr=self.hparams["lr_d"],
             weight_decay=self.hparams['weight_decay_d'],
             betas=(self.hparams['beta1'], 0.9))
 
         self.gen_opt = torch.optim.Adam(
             (list(self.featurizer.parameters()) +
-                list(self.classifier.parameters())),
+             list(self.classifier.parameters())),
             lr=self.hparams["lr_g"],
             weight_decay=self.hparams['weight_decay_g'],
             betas=(self.hparams['beta1'], 0.9))
@@ -284,7 +289,7 @@ class AbstractDANN(Algorithm):
             disc_input = all_z
         disc_out = self.discriminator(disc_input)
         disc_labels = torch.cat([
-            torch.full((x.shape[0], ), i, dtype=torch.int64, device=device)
+            torch.full((x.shape[0],), i, dtype=torch.int64, device=device)
             for i, (x, y) in enumerate(minibatches)
         ])
 
@@ -298,12 +303,12 @@ class AbstractDANN(Algorithm):
 
         disc_softmax = F.softmax(disc_out, dim=1)
         input_grad = autograd.grad(disc_softmax[:, disc_labels].sum(),
-            [disc_input], create_graph=True)[0]
-        grad_penalty = (input_grad**2).sum(dim=1).mean(dim=0)
+                                   [disc_input], create_graph=True)[0]
+        grad_penalty = (input_grad ** 2).sum(dim=1).mean(dim=0)
         disc_loss += self.hparams['grad_penalty'] * grad_penalty
 
         d_steps_per_g = self.hparams['d_steps_per_g_step']
-        if (self.update_count.item() % (1+d_steps_per_g) < d_steps_per_g):
+        if (self.update_count.item() % (1 + d_steps_per_g) < d_steps_per_g):
 
             self.disc_opt.zero_grad()
             disc_loss.backward()
@@ -323,18 +328,21 @@ class AbstractDANN(Algorithm):
     def predict(self, x):
         return self.classifier(self.featurizer(x))
 
+
 class DANN(AbstractDANN):
     """Unconditional DANN"""
+
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(DANN, self).__init__(input_shape, num_classes, num_domains,
-            hparams, conditional=False, class_balance=False)
+                                   hparams, conditional=False, class_balance=False)
 
 
 class CDANN(AbstractDANN):
     """Conditional DANN"""
+
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(CDANN, self).__init__(input_shape, num_classes, num_domains,
-            hparams, conditional=True, class_balance=True)
+                                    hparams, conditional=True, class_balance=True)
 
 
 class IRM(ERM):
@@ -359,12 +367,12 @@ class IRM(ERM):
     def update(self, minibatches, unlabeled=None):
         device = "cuda" if minibatches[0][0].is_cuda else "cpu"
         penalty_weight = (self.hparams['irm_lambda'] if self.update_count
-                          >= self.hparams['irm_penalty_anneal_iters'] else
+                                                        >= self.hparams['irm_penalty_anneal_iters'] else
                           1.0)
         nll = 0.
         penalty = 0.
 
-        all_x = torch.cat([x for x,y in minibatches])
+        all_x = torch.cat([x for x, y in minibatches])
         all_logits = self.network(all_x)
         all_logits_idx = 0
         for i, (x, y) in enumerate(minibatches):
@@ -390,14 +398,15 @@ class IRM(ERM):
 
         self.update_count += 1
         return {'loss': loss.item(), 'nll': nll.item(),
-            'penalty': penalty.item()}
+                'penalty': penalty.item()}
 
 
 class VREx(ERM):
     """V-REx algorithm from http://arxiv.org/abs/2003.00688"""
+
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(VREx, self).__init__(input_shape, num_classes, num_domains,
-                                  hparams)
+                                   hparams)
         self.register_buffer('update_count', torch.tensor([0]))
 
     def update(self, minibatches, unlabeled=None):
@@ -445,6 +454,7 @@ class Mixup(ERM):
     https://arxiv.org/pdf/2001.00677.pdf
     https://arxiv.org/pdf/1912.01805.pdf
     """
+
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(Mixup, self).__init__(input_shape, num_classes, num_domains,
                                     hparams)
@@ -476,9 +486,10 @@ class GroupDRO(ERM):
     Robust ERM minimizes the error at the worst minibatch
     Algorithm 1 from [https://arxiv.org/pdf/1911.08731.pdf]
     """
+
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(GroupDRO, self).__init__(input_shape, num_classes, num_domains,
-                                        hparams)
+                                       hparams)
         self.register_buffer("q", torch.Tensor())
 
     def update(self, minibatches, unlabeled=None):
@@ -512,6 +523,7 @@ class MLDG(ERM):
     Related: https://arxiv.org/pdf/1703.03400.pdf
     Related: https://arxiv.org/pdf/1910.13580.pdf
     """
+
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(MLDG, self).__init__(input_shape, num_classes, num_domains,
                                    hparams)
@@ -569,7 +581,7 @@ class MLDG(ERM):
             # this computes Gj on the clone-network
             loss_inner_j = F.cross_entropy(inner_net(xj), yj)
             grad_inner_j = autograd.grad(loss_inner_j, inner_net.parameters(),
-                allow_unused=True)
+                                         allow_unused=True)
 
             # `objective` is populated for reporting purposes
             objective += (self.hparams['mldg_beta'] * loss_inner_j).item()
@@ -625,9 +637,10 @@ class AbstractMMD(ERM):
     Perform ERM while matching the pair-wise domain feature distributions
     using MMD (abstract class)
     """
+
     def __init__(self, input_shape, num_classes, num_domains, hparams, gaussian):
         super(AbstractMMD, self).__init__(input_shape, num_classes, num_domains,
-                                  hparams)
+                                          hparams)
         if gaussian:
             self.kernel_type = "gaussian"
         else:
@@ -689,7 +702,7 @@ class AbstractMMD(ERM):
             penalty /= (nmb * (nmb - 1) / 2)
 
         self.optimizer.zero_grad()
-        (objective + (self.hparams['mmd_gamma']*penalty)).backward()
+        (objective + (self.hparams['mmd_gamma'] * penalty)).backward()
         self.optimizer.step()
 
         if torch.is_tensor(penalty):
@@ -705,7 +718,7 @@ class MMD(AbstractMMD):
 
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(MMD, self).__init__(input_shape, num_classes,
-                                          num_domains, hparams, gaussian=True)
+                                  num_domains, hparams, gaussian=True)
 
 
 class CORAL(AbstractMMD):
@@ -715,7 +728,7 @@ class CORAL(AbstractMMD):
 
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(CORAL, self).__init__(input_shape, num_classes,
-                                         num_domains, hparams, gaussian=False)
+                                    num_domains, hparams, gaussian=False)
 
 
 class MTL(Algorithm):
@@ -734,7 +747,7 @@ class MTL(Algorithm):
             num_classes,
             self.hparams['nonlinear_classifier'])
         self.optimizer = torch.optim.Adam(
-            list(self.featurizer.parameters()) +\
+            list(self.featurizer.parameters()) + \
             list(self.classifier.parameters()),
             lr=self.hparams["lr"],
             weight_decay=self.hparams['weight_decay']
@@ -761,7 +774,7 @@ class MTL(Algorithm):
         return_embedding = features.mean(0)
 
         if env is not None:
-            return_embedding = self.ema * return_embedding +\
+            return_embedding = self.ema * return_embedding + \
                                (1 - self.ema) * self.embeddings[env]
 
             self.embeddings[env] = return_embedding.clone().detach()
@@ -773,6 +786,7 @@ class MTL(Algorithm):
         embedding = self.update_embeddings_(features, env).normal_()
         return self.classifier(torch.cat((features, embedding), 1))
 
+
 class SagNet(Algorithm):
     """
     Style Agnostic Network
@@ -781,7 +795,7 @@ class SagNet(Algorithm):
 
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(SagNet, self).__init__(input_shape, num_classes, num_domains,
-                                  hparams)
+                                     hparams)
         # featurizer network
         self.network_f = networks.Featurizer(input_shape, self.hparams)
         # content network
@@ -824,7 +838,7 @@ class SagNet(Algorithm):
 
         def opt(p):
             return torch.optim.Adam(p, lr=hparams["lr"],
-                    weight_decay=hparams["weight_decay"])
+                                    weight_decay=hparams["weight_decay"])
 
         self.optimizer_f = opt(self.network_f.parameters())
         self.optimizer_c = opt(self.network_c.parameters())
@@ -898,7 +912,7 @@ class SagNet(Algorithm):
 class RSC(ERM):
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(RSC, self).__init__(input_shape, num_classes, num_domains,
-                                   hparams)
+                                  hparams)
         self.drop_f = (1 - hparams['rsc_f_drop_factor']) * 100
         self.drop_b = (1 - hparams['rsc_b_drop_factor']) * 100
         self.num_classes = num_classes
@@ -957,14 +971,15 @@ class SD(ERM):
     Gradient Starvation: A Learning Proclivity in Neural Networks
     Equation 25 from [https://arxiv.org/pdf/2011.09468.pdf]
     """
+
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(SD, self).__init__(input_shape, num_classes, num_domains,
-                                        hparams)
+                                 hparams)
         self.sd_reg = hparams["sd_reg"]
 
     def update(self, minibatches, unlabeled=None):
-        all_x = torch.cat([x for x,y in minibatches])
-        all_y = torch.cat([y for x,y in minibatches])
+        all_x = torch.cat([x for x, y in minibatches])
+        all_y = torch.cat([y for x, y in minibatches])
         all_p = self.predict(all_x)
 
         loss = F.cross_entropy(all_p, all_y)
@@ -976,6 +991,7 @@ class SD(ERM):
         self.optimizer.step()
 
         return {'loss': loss.item(), 'penalty': penalty.item()}
+
 
 class ANDMask(ERM):
     """
@@ -993,7 +1009,7 @@ class ANDMask(ERM):
         param_gradients = [[] for _ in self.network.parameters()]
         for i, (x, y) in enumerate(minibatches):
             logits = self.network(x)
-            
+
             env_loss = F.cross_entropy(logits, y)
             mean_loss += env_loss.item() / len(minibatches)
 
@@ -1022,6 +1038,7 @@ class ANDMask(ERM):
 
         return 0
 
+
 class IGA(ERM):
     """
     Inter-environmental Gradient Alignment
@@ -1040,14 +1057,14 @@ class IGA(ERM):
             env_loss = F.cross_entropy(logits, y)
             total_loss += env_loss
 
-            env_grad = autograd.grad(env_loss, self.network.parameters(), 
-                                        create_graph=True)
+            env_grad = autograd.grad(env_loss, self.network.parameters(),
+                                     create_graph=True)
 
             grads.append(env_grad)
-            
+
         mean_loss = total_loss / len(minibatches)
-        mean_grad = autograd.grad(mean_loss, self.network.parameters(), 
-                                        retain_graph=True)
+        mean_grad = autograd.grad(mean_loss, self.network.parameters(),
+                                  retain_graph=True)
 
         # compute trace penalty
         penalty_value = 0
@@ -1062,39 +1079,39 @@ class IGA(ERM):
         self.optimizer.step()
 
         return {'loss': mean_loss.item(), 'penalty': penalty_value.item()}
-    
-    
+
+
 class SelfReg(ERM):
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(SelfReg, self).__init__(input_shape, num_classes, num_domains,
-                                   hparams)
+                                      hparams)
         self.num_classes = num_classes
         self.MSEloss = nn.MSELoss()
         input_feat_size = self.featurizer.n_outputs
-        hidden_size = input_feat_size if input_feat_size==2048 else input_feat_size*2
-        
+        hidden_size = input_feat_size if input_feat_size == 2048 else input_feat_size * 2
+
         self.cdpl = nn.Sequential(
-                            nn.Linear(input_feat_size, hidden_size),
-                            nn.BatchNorm1d(hidden_size),
-                            nn.ReLU(inplace=True),
-                            nn.Linear(hidden_size, hidden_size),
-                            nn.BatchNorm1d(hidden_size),
-                            nn.ReLU(inplace=True),
-                            nn.Linear(hidden_size, input_feat_size),
-                            nn.BatchNorm1d(input_feat_size)
+            nn.Linear(input_feat_size, hidden_size),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_size, hidden_size),
+            nn.BatchNorm1d(hidden_size),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_size, input_feat_size),
+            nn.BatchNorm1d(input_feat_size)
         )
-        
+
     def update(self, minibatches, unlabeled=None):
-        
+
         all_x = torch.cat([x for x, y in minibatches])
         all_y = torch.cat([y for _, y in minibatches])
 
         lam = np.random.beta(0.5, 0.5)
-        
+
         batch_size = all_y.size()[0]
-        
+
         # cluster and order features into same-class group
-        with torch.no_grad():   
+        with torch.no_grad():
             sorted_y, indices = torch.sort(all_y)
             sorted_x = torch.zeros_like(all_x)
             for idx, order in enumerate(indices):
@@ -1102,7 +1119,7 @@ class SelfReg(ERM):
             intervals = []
             ex = 0
             for idx, val in enumerate(sorted_y):
-                if ex==val:
+                if ex == val:
                     continue
                 intervals.append(idx)
                 ex = val
@@ -1110,10 +1127,10 @@ class SelfReg(ERM):
 
             all_x = sorted_x
             all_y = sorted_y
-        
+
         feat = self.featurizer(all_x)
         proj = self.cdpl(feat)
-        
+
         output = self.classifier(feat)
 
         # shuffle
@@ -1123,29 +1140,29 @@ class SelfReg(ERM):
         feat_3 = torch.zeros_like(proj)
         ex = 0
         for end in intervals:
-            shuffle_indices = torch.randperm(end-ex)+ex
-            shuffle_indices2 = torch.randperm(end-ex)+ex
-            for idx in range(end-ex):
-                output_2[idx+ex] = output[shuffle_indices[idx]]
-                feat_2[idx+ex] = proj[shuffle_indices[idx]]
-                output_3[idx+ex] = output[shuffle_indices2[idx]]
-                feat_3[idx+ex] = proj[shuffle_indices2[idx]]
+            shuffle_indices = torch.randperm(end - ex) + ex
+            shuffle_indices2 = torch.randperm(end - ex) + ex
+            for idx in range(end - ex):
+                output_2[idx + ex] = output[shuffle_indices[idx]]
+                feat_2[idx + ex] = proj[shuffle_indices[idx]]
+                output_3[idx + ex] = output[shuffle_indices2[idx]]
+                feat_3[idx + ex] = proj[shuffle_indices2[idx]]
             ex = end
-        
+
         # mixup 
-        output_3 = lam*output_2 + (1-lam)*output_3
-        feat_3 = lam*feat_2 + (1-lam)*feat_3
+        output_3 = lam * output_2 + (1 - lam) * output_3
+        feat_3 = lam * feat_2 + (1 - lam) * feat_3
 
         # regularization
         L_ind_logit = self.MSEloss(output, output_2)
         L_hdl_logit = self.MSEloss(output, output_3)
         L_ind_feat = 0.3 * self.MSEloss(feat, feat_2)
         L_hdl_feat = 0.3 * self.MSEloss(feat, feat_3)
-        
+
         cl_loss = F.cross_entropy(output, all_y)
         C_scale = min(cl_loss.item(), 1.)
-        loss = cl_loss + C_scale*(lam*(L_ind_logit + L_ind_feat)+(1-lam)*(L_hdl_logit + L_hdl_feat))
-     
+        loss = cl_loss + C_scale * (lam * (L_ind_logit + L_ind_feat) + (1 - lam) * (L_hdl_logit + L_hdl_feat))
+
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -1215,7 +1232,6 @@ class SANDMask(ERM):
             mask_t = (mask.sum() / mask.numel())
             param.grad = mask * avg_grad
             param.grad *= (1. / (1e-10 + mask_t))
-
 
 
 class Fishr(Algorithm):
@@ -1348,6 +1364,7 @@ class Fishr(Algorithm):
     def predict(self, x):
         return self.network(x)
 
+
 class TRM(Algorithm):
     """
     Learning Representations that Support Robust Transfer of Predictors
@@ -1355,16 +1372,16 @@ class TRM(Algorithm):
     """
 
     def __init__(self, input_shape, num_classes, num_domains, hparams):
-        super(TRM, self).__init__(input_shape, num_classes, num_domains,hparams)
+        super(TRM, self).__init__(input_shape, num_classes, num_domains, hparams)
         self.register_buffer('update_count', torch.tensor([0]))
         self.num_domains = num_domains
         self.featurizer = networks.Featurizer(input_shape, self.hparams)
         self.classifier = nn.Linear(self.featurizer.n_outputs, num_classes).cuda()
-        self.clist = [nn.Linear(self.featurizer.n_outputs, num_classes).cuda() for i in range(num_domains+1)]
+        self.clist = [nn.Linear(self.featurizer.n_outputs, num_classes).cuda() for i in range(num_domains + 1)]
         self.olist = [torch.optim.SGD(
             self.clist[i].parameters(),
             lr=1e-1,
-        ) for i in range(num_domains+1)]
+        ) for i in range(num_domains + 1)]
 
         self.optimizer_f = torch.optim.Adam(
             self.featurizer.parameters(),
@@ -1427,7 +1444,7 @@ class TRM(Algorithm):
                 for classifier in self.clist:
                     classifier.weight.data = copy.deepcopy(self.classifier.weight.data)
             self.alpha /= self.alpha.sum(1, keepdim=True)
-            
+
             self.featurizer.train()
             all_x = torch.cat([x for x, y in minibatches])
             all_y = torch.cat([y for x, y in minibatches])
@@ -1468,8 +1485,9 @@ class TRM(Algorithm):
                 grad_Q = autograd.grad(loss_Q, self.clist[Q].weight, create_graph=True)
                 vec_grad_Q = nn.utils.parameters_to_vector(grad_Q)
 
-                loss_P = [F.cross_entropy(self.clist[Q](feature_split[i]), y_split[i])*(self.alpha[Q, i].data.detach())
-                          if i in sample_list else 0. for i in range(len(minibatches))]
+                loss_P = [
+                    F.cross_entropy(self.clist[Q](feature_split[i]), y_split[i]) * (self.alpha[Q, i].data.detach())
+                    if i in sample_list else 0. for i in range(len(minibatches))]
                 loss_P_sum = sum(loss_P)
                 grad_P = autograd.grad(loss_P_sum, self.clist[Q].weight, create_graph=True)
                 vec_grad_P = nn.utils.parameters_to_vector(grad_P).detach()
@@ -1516,12 +1534,13 @@ class TRM(Algorithm):
     def eval(self):
         self.featurizer.eval()
 
+
 class IB_ERM(ERM):
     """Information Bottleneck based ERM on feature with conditionning"""
 
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(IB_ERM, self).__init__(input_shape, num_classes, num_domains,
-                                  hparams)
+                                     hparams)
         self.optimizer = torch.optim.Adam(
             list(self.featurizer.parameters()) + list(self.classifier.parameters()),
             lr=self.hparams["lr"],
@@ -1532,13 +1551,13 @@ class IB_ERM(ERM):
     def update(self, minibatches, unlabeled=None):
         device = "cuda" if minibatches[0][0].is_cuda else "cpu"
         ib_penalty_weight = (self.hparams['ib_lambda'] if self.update_count
-                          >= self.hparams['ib_penalty_anneal_iters'] else
-                          0.0)
+                                                          >= self.hparams['ib_penalty_anneal_iters'] else
+                             0.0)
 
         nll = 0.
         ib_penalty = 0.
 
-        all_x = torch.cat([x for x,y in minibatches])
+        all_x = torch.cat([x for x, y in minibatches])
         all_features = self.featurizer(all_x)
         all_logits = self.classifier(all_features)
         all_logits_idx = 0
@@ -1553,7 +1572,7 @@ class IB_ERM(ERM):
         ib_penalty /= len(minibatches)
 
         # Compile loss
-        loss = nll 
+        loss = nll
         loss += ib_penalty_weight * ib_penalty
 
         if self.update_count == self.hparams['ib_penalty_anneal_iters']:
@@ -1569,16 +1588,17 @@ class IB_ERM(ERM):
         self.optimizer.step()
 
         self.update_count += 1
-        return {'loss': loss.item(), 
+        return {'loss': loss.item(),
                 'nll': nll.item(),
                 'IB_penalty': ib_penalty.item()}
+
 
 class IB_IRM(ERM):
     """Information Bottleneck based IRM on feature with conditionning"""
 
     def __init__(self, input_shape, num_classes, num_domains, hparams):
         super(IB_IRM, self).__init__(input_shape, num_classes, num_domains,
-                                  hparams)
+                                     hparams)
         self.optimizer = torch.optim.Adam(
             list(self.featurizer.parameters()) + list(self.classifier.parameters()),
             lr=self.hparams["lr"],
@@ -1600,17 +1620,17 @@ class IB_IRM(ERM):
     def update(self, minibatches, unlabeled=None):
         device = "cuda" if minibatches[0][0].is_cuda else "cpu"
         irm_penalty_weight = (self.hparams['irm_lambda'] if self.update_count
-                          >= self.hparams['irm_penalty_anneal_iters'] else
-                          1.0)
+                                                            >= self.hparams['irm_penalty_anneal_iters'] else
+                              1.0)
         ib_penalty_weight = (self.hparams['ib_lambda'] if self.update_count
-                          >= self.hparams['ib_penalty_anneal_iters'] else
-                          0.0)
+                                                          >= self.hparams['ib_penalty_anneal_iters'] else
+                             0.0)
 
         nll = 0.
         irm_penalty = 0.
         ib_penalty = 0.
 
-        all_x = torch.cat([x for x,y in minibatches])
+        all_x = torch.cat([x for x, y in minibatches])
         all_features = self.featurizer(all_x)
         all_logits = self.classifier(all_features)
         all_logits_idx = 0
@@ -1627,11 +1647,12 @@ class IB_IRM(ERM):
         ib_penalty /= len(minibatches)
 
         # Compile loss
-        loss = nll 
+        loss = nll
         loss += irm_penalty_weight * irm_penalty
         loss += ib_penalty_weight * ib_penalty
 
-        if self.update_count == self.hparams['irm_penalty_anneal_iters'] or self.update_count == self.hparams['ib_penalty_anneal_iters']:
+        if self.update_count == self.hparams['irm_penalty_anneal_iters'] or self.update_count == self.hparams[
+            'ib_penalty_anneal_iters']:
             # Reset Adam, because it doesn't like the sharp jump in gradient
             # magnitudes that happens at this step.
             self.optimizer = torch.optim.Adam(
@@ -1644,7 +1665,7 @@ class IB_IRM(ERM):
         self.optimizer.step()
 
         self.update_count += 1
-        return {'loss': loss.item(), 
+        return {'loss': loss.item(),
                 'nll': nll.item(),
-                'IRM_penalty': irm_penalty.item(), 
+                'IRM_penalty': irm_penalty.item(),
                 'IB_penalty': ib_penalty.item()}
