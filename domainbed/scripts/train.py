@@ -77,9 +77,6 @@ def getParameters():
             args.data_dir = "E:\\Dataset"
         else:
             raise Exception("Unknown computer host, unable to set data directory")
-    args.data_dir = Path(args.data_dir)
-    if not args.data_dir.exists():
-        raise Exception("dataset directory is not existed!")
 
     if args.output_dir == "Not Setting":
         if hostname == "THINKPAD-X1E":
@@ -90,13 +87,6 @@ def getParameters():
             args.output_dir = "train_output"
         else:
             raise Exception("Unknown computer host, unable to set data directory")
-    args.output_dir = args.data_dir / (args.dataset + "_" + args.output_dir)
-
-    if not args.output_dir.exists():
-        args.output_dir.mkdir()
-
-    sys.stdout = misc.Tee(args.output_dir / 'out.txt')
-    sys.stderr = misc.Tee(args.output_dir / 'err.txt')
 
     if torch.cuda.is_available():
         args.device = "cuda"
@@ -155,6 +145,12 @@ if __name__ == "__main__":
     hparams = args.hparams
     device = args.device
     cluster = args.cluster
+    data_dir = Path(args.data_dir)
+    output_dir = data_dir / (args.dataset + "_" + args.output_dir)
+    sys.stdout = misc.Tee(output_dir / 'out.txt')
+    sys.stderr = misc.Tee(output_dir / 'err.txt')
+    if not output_dir.exists():
+        output_dir.mkdir()
 
     # If we ever want to implement checkpointing, just persist these values
     # every once in a while, and then load them from disk here.
@@ -162,7 +158,7 @@ if __name__ == "__main__":
     algorithm_dict = None
 
     if args.dataset in vars(datasets):
-        dataset = vars(datasets)[args.dataset](args.data_dir,
+        dataset = vars(datasets)[args.dataset](data_dir,
                                                args.test_envs, hparams)
     else:
         raise NotImplementedError
@@ -289,7 +285,7 @@ if __name__ == "__main__":
             "model_hparams": hparams,
             "model_dict": algorithm.state_dict()
         }
-        torch.save(save_dict, args.output_dir / filename)
+        torch.save(save_dict, output_dir / filename)
 
 
     def return_centroids(algorithm, step):
@@ -399,7 +395,7 @@ if __name__ == "__main__":
                 'args': vars(args)
             })
 
-            epochs_path = args.output_dir / 'results.json'
+            epochs_path = output_dir / 'results.json'
             with open(epochs_path, 'a') as f:
                 f.write(json.dumps(results, sort_keys=True) + "\n")
 
@@ -412,5 +408,5 @@ if __name__ == "__main__":
 
     save_checkpoint('model.pkl')
 
-    with open(os.path.join(args.output_dir, 'done'), 'w') as f:
+    with open(output_dir / 'done', 'w') as f:
         f.write('done')
