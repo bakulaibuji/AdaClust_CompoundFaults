@@ -147,10 +147,10 @@ if __name__ == "__main__":
     cluster = args.cluster
     data_dir = Path(args.data_dir)
     output_dir = data_dir / (args.dataset + "_" + args.output_dir)
-    sys.stdout = misc.Tee(output_dir / 'out.txt')
-    sys.stderr = misc.Tee(output_dir / 'err.txt')
     if not output_dir.exists():
         output_dir.mkdir()
+    sys.stdout = misc.Tee(output_dir / 'out.txt')
+    sys.stderr = misc.Tee(output_dir / 'err.txt')
 
     # If we ever want to implement checkpointing, just persist these values
     # every once in a while, and then load them from disk here.
