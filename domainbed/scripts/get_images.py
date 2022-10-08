@@ -61,6 +61,6 @@ if __name__ == "__main__":
 
             plt.pcolormesh(Xn, Yn, Z_new, shading='auto')
             plt.axis('off')
-            # plt.savefig(fault_type_folder / (str(beg) + '.png'), dpi=300, bbox_inches='tight', pad_inches=0)
+            plt.savefig(fault_type_folder / (str(beg) + '.png'), dpi=300, bbox_inches='tight', pad_inches=0)
             plt.clf()
             plt.close()
