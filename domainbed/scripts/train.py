@@ -31,11 +31,14 @@ def getParameters():
     parser.add_argument('--num_workers', type=int, default=2, help='Number of workers')
 
     # ------------- Parameters for Task -----------------#
-    parser.add_argument('--dataset', type=str, default="TerraIncognita")
+    parser.add_argument('--dataset', type=str, default="CompoundFaults")
     parser.add_argument('--algorithm', type=str, default="AdaClust")
     parser.add_argument('--task', type=str, default="domain_generalization",
                         choices=["domain_generalization", "domain_adaptation"])
     parser.add_argument('--test_envs', type=int, nargs='+', default=[0])
+    parser.add_argument('--seen_domains', type=str, nargs='+', default=["HH", "HL", "LH", "LL", "MH", "ML"])
+    parser.add_argument('--unseen_domains', type=str, nargs='+',
+                        default=["B1H", "B1L", "B2H", "B2L", "B3H", "B3L", "B4H", "B4L"])
 
     # ------------- HyperParameters -----------------#
     parser.add_argument('--batch_size', type=int, default=32,
@@ -70,11 +73,11 @@ def getParameters():
     hostname = socket.gethostname()
     if args.data_dir == "Not Setting":
         if hostname == "THINKPAD-X1E":
-            args.data_dir = "D:\\datasets"
+            args.data_dir = "D:\\datasets\\复合故障数据集\\数据"
         elif hostname == "huangteam-112":
-            args.data_dir = "/home/huangteam/wangyuxiang/data"
+            args.data_dir = "/home/huangteam/wangyuxiang/data/Compound Faults"
         elif hostname == "wang":
-            args.data_dir = "E:\\Dataset"
+            args.data_dir = "E:\\Dataset\\Machinery\\Gear\\复合故障数据集\\数据"
         else:
             raise Exception("Unknown computer host, unable to set data directory")
 
@@ -185,15 +188,16 @@ if __name__ == "__main__":
         out, in_ = misc.split_dataset(
             env, int(len(env) * args.holdout_fraction), misc.seed_hash(args.trial_seed, env_i)
         )
-        if env_i in args.test_envs:
+        if env.name in args.unseen_domains:
             uda, in_ = misc.split_dataset(
                 in_, int(len(in_) * args.uda_holdout_fraction), misc.seed_hash(args.trial_seed, env_i)
             )
-        test_data_sep.append(in_)
-        eval_loader_names += ["env{}_in".format(env_i)]
-        test_data_sep.append(out)
-        eval_loader_names += ["env{}_out".format(env_i)]
-        if env_i not in args.test_envs:
+        if env.name in args.unseen_domains or env.name in args.seen_domains:
+            test_data_sep.append(in_)
+            eval_loader_names += [env.name + "{}_in".format(env_i)]
+            test_data_sep.append(out)
+            eval_loader_names += [env.name + "{}_out".format(env_i)]
+        if env.name in args.seen_domains:
             train_data_sep.append(in_)
             train_domain_labels.extend([env_i] * len(in_))
 
@@ -243,7 +247,7 @@ if __name__ == "__main__":
     # Get Algorithm
     algorithm_class = algorithms.get_algorithm_class(args.algorithm)
     algorithm = algorithm_class(dataset.input_shape, dataset.num_classes,
-                                len(dataset) - len(args.test_envs), hparams)
+                                len(args.seen_domains), hparams)
     if algorithm_dict is not None:
         algorithm.load_state_dict(algorithm_dict)
     algorithm.to(device)
@@ -281,7 +285,7 @@ if __name__ == "__main__":
             "args": vars(args),
             "model_input_shape": dataset.input_shape,
             "model_num_classes": dataset.num_classes,
-            "model_num_domains": len(dataset) - len(args.test_envs),
+            "model_num_domains": len(args.seen_domains),
             "model_hparams": hparams,
             "model_dict": algorithm.state_dict()
         }

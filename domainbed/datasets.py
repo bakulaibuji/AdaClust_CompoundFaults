@@ -23,6 +23,7 @@ DATASETS = [
     "ColoredMNIST",
     "RotatedMNIST",
     # Big images
+    "CompoundFaults",
     "VLCS",
     "PACS",
     "OfficeHome",
@@ -206,15 +207,10 @@ class MultipleEnvironmentImageFolder(MultipleDomainDataset):
 
         self.datasets = []
         for i, environment in enumerate(environments):
-
-            if augment and (i not in test_envs):
-                env_transform = augment_transform
-            else:
-                env_transform = transform
-
             path = root / environment
             env_dataset = ImageFolder(str(path),
                                       transform=transform)
+            env_dataset.name = environment
 
             self.datasets.append(env_dataset)
 
@@ -264,6 +260,15 @@ class TerraIncognita(MultipleEnvironmentImageFolder):
 
     def __init__(self, root: Path, test_envs, hparams):
         self.dir = root / "terra_incognita"
+        super().__init__(self.dir, test_envs, hparams['data_augmentation'], hparams)
+
+
+class CompoundFaults(MultipleEnvironmentImageFolder):
+    CHECKPOINT_FREQ = 300
+    ENVIRONMENTS = ["B1H", "B1L", "B2H", "B2L", "B3H", "B3L", "B4H", "B4L", "HH", "HL", "LH", "LL", "MH", "ML"]
+
+    def __init__(self, root: Path, test_envs, hparams):
+        self.dir = root / "Images"
         super().__init__(self.dir, test_envs, hparams['data_augmentation'], hparams)
 
 
