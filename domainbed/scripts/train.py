@@ -352,6 +352,7 @@ if __name__ == "__main__":
         if step == 0 or (step in cluster_step):
             if cluster:
                 train_centroids, test_centroids, exp_var = return_centroids(algorithm, step)
+                print("calculate centroids successfully!")
             else:
                 test_centroids = None
 
