@@ -264,7 +264,7 @@ class TerraIncognita(MultipleEnvironmentImageFolder):
 
 
 class CompoundFaults(MultipleEnvironmentImageFolder):
-    CHECKPOINT_FREQ = 20
+    CHECKPOINT_FREQ = 5
     ENVIRONMENTS = ["B1H", "B1L", "B2H", "B2L", "B3H", "B3L", "B4H", "B4L", "HH", "HL", "LH", "LL", "MH", "ML"]
 
     def __init__(self, root: Path, test_envs, hparams):
