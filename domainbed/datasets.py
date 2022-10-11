@@ -268,7 +268,7 @@ class CompoundFaults(MultipleEnvironmentImageFolder):
     ENVIRONMENTS = ["B1H", "B1L", "B2H", "B2L", "B3H", "B3L", "B4H", "B4L", "HH", "HL", "LH", "LL", "MH", "ML"]
 
     def __init__(self, root: Path, test_envs, hparams):
-        self.dir = root / "Images"
+        self.dir = root / "Images2"
         super().__init__(self.dir, test_envs, hparams['data_augmentation'], hparams)
 
 
