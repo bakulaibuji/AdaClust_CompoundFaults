@@ -19,48 +19,58 @@ if __name__ == "__main__":
     x_len = pic_size * 5
     f_len = pic_size * 2
 
-    path_orig = Path('D:\datasets\复合故障数据集\数据\Case 1')
+    path_orig = Path('/home/huangteam/wangyuxiang/data/Compound Faults')
     if not path_orig.exists():
         raise Exception('original path does not exist!')
 
-    path_out = Path('D:\datasets\复合故障数据集\数据\Images')
+    path_out = Path('/home/huangteam/wangyuxiang/data/Compound Faults/Images2')
     if not path_out.exists():
         path_out.mkdir()
 
     files = [f for f in path_orig.glob('*') if not f.is_dir()]
     fault_types = ['正常', '裂纹', '断齿', '缺齿', '磨损', '点蚀', '磨损+点蚀', '裂纹+缺齿', '裂纹+断齿']
 
+    split_num = 3
+
     input = sys.argv
-    file = files[int(input[1])]
-    name = file.name.split(".")[0]
-    folder = path_out / name
-    if not folder.exists():
-        folder.mkdir()
+    for file in files:
+        if "B4" not in file.name:
+            continue
 
-    read_file = h5py.File(file, 'r')
-    signals = pd.DataFrame(np.array(read_file['x']))
-    read_file.close()
+        name = file.name.split(".")[0]
+        for i in range(split_num):
+            temp_name = name + str(i)
+            folder = path_out / temp_name
+            if not folder.exists():
+                folder.mkdir()
+            for index, fault_type in enumerate(fault_types):
+                fault_type_folder = folder / fault_type
+                if not fault_type_folder.exists():
+                    fault_type_folder.mkdir()
 
-    for index, fault_type in enumerate(fault_types):
-        fault_type_folder = folder / fault_type
-        if not fault_type_folder.exists():
-            fault_type_folder.mkdir()
+        read_file = h5py.File(file, 'r')
+        signals = pd.DataFrame(np.array(read_file['x']))
+        read_file.close()
 
-        for beg in tqdm(range(0, signals.shape[1] - data_segment, data_segment)):
-            sig = signals.iloc[index][beg: beg + data_segment]
+        for index, fault_type in enumerate(fault_types):
 
-            if max(sig) < 0.01:
-                continue
+            for beg in tqdm(range(0, signals.shape[1] - data_segment, data_segment)):
+                sig = signals.iloc[index][beg: beg + data_segment]
 
-            f, t, Zxx = signal.stft(sig, sampling_frequency, window=window, nperseg=nperseg, noverlap=noverlap)
-            newF = interp2d(t, f, np.abs(Zxx), kind='linear')
-            t_new = np.linspace(0, 1 / sampling_frequency * data_segment, num=x_len)
-            f_new = np.linspace(0, sampling_frequency // 2, num=f_len)
-            Z_new = newF(t_new, f_new)
-            Xn, Yn = np.meshgrid(t_new, f_new)
+                if max(sig) < 0.01:
+                    continue
 
-            plt.pcolormesh(Xn, Yn, Z_new, shading='auto')
-            plt.axis('off')
-            plt.savefig(fault_type_folder / (str(beg) + '.png'), dpi=300, bbox_inches='tight', pad_inches=0)
-            plt.clf()
-            plt.close()
+                f, t, Zxx = signal.stft(sig, sampling_frequency, window=window, nperseg=nperseg, noverlap=noverlap)
+                newF = interp2d(t, f, np.abs(Zxx), kind='linear')
+                t_new = np.linspace(0, 1 / sampling_frequency * data_segment, num=x_len)
+                f_new = np.linspace(0, sampling_frequency // 2, num=f_len)
+                Z_new = newF(t_new, f_new)
+                Xn, Yn = np.meshgrid(t_new, f_new)
+
+                plt.pcolormesh(Xn, Yn, Z_new, shading='auto')
+                plt.axis('off')
+                num = int(signals.shape[1] / split_num)
+                fault_type_folder = path_out / (name + str(num)) / fault_type
+                plt.savefig(fault_type_folder / (str(beg) + '.png'), dpi=300, bbox_inches='tight', pad_inches=0)
+                plt.clf()
+                plt.close()
