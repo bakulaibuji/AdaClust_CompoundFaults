@@ -69,7 +69,7 @@ if __name__ == "__main__":
 
                 plt.pcolormesh(Xn, Yn, Z_new, shading='auto')
                 plt.axis('off')
-                num = int(signals.shape[1] / split_num)
+                num = int(beg / (signals.shape[1] / split_num))
                 fault_type_folder = path_out / (name + str(num)) / fault_type
                 plt.savefig(fault_type_folder / (str(beg) + '.png'), dpi=300, bbox_inches='tight', pad_inches=0)
                 plt.clf()
