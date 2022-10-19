@@ -264,6 +264,7 @@ class TerraIncognita(MultipleEnvironmentImageFolder):
 
 
 class CompoundFaults(MultipleEnvironmentImageFolder):
+    N_STEPS = 50001  # Default, subclasses may override
     CHECKPOINT_FREQ = 5
     ENVIRONMENTS = ["B1H", "B1L", "B2H", "B2L", "B3H", "B3L", "B4H", "B4L", "HH", "HL", "LH", "LL", "MH", "ML"]
 
