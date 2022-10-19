@@ -392,7 +392,7 @@ if __name__ == "__main__":
 
             results_keys = sorted(results.keys())
             if results_keys != last_results_keys:
-                misc.print_row(results_keys, colwidth=12)
+                misc.print_row(results_keys, colwidth=24)
                 last_results_keys = results_keys
             misc.print_row([results[key] for key in results_keys],
                            colwidth=12)
