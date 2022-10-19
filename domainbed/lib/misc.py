@@ -162,10 +162,13 @@ def random_pairs_of_minibatches(minibatches):
     return pairs
 
 
-def accuracy(network, loader, weights, device, test_centroids=None):
+def accuracy(network, loader, weights, device, n_class, test_centroids=None):
     correct = 0
     total = 0
     weights_offset = 0
+
+    sum_class = [0 for i in range(n_class)]
+    cor_class = [0 for i in range(n_class)]
 
     network.eval()
     with torch.no_grad():
@@ -184,7 +187,14 @@ def accuracy(network, loader, weights, device, test_centroids=None):
                     correct += (p.gt(0).eq(y).float() * batch_weights.view(-1, 1)).sum().item()
                 else:
                     correct += (p.argmax(1).eq(y).float() * batch_weights).sum().item()
+                tmp_res = p.argmax(1).eq(y)
                 total += batch_weights.sum().item()
+
+                for k in range(p.shape[0]):
+                    sum_class[y[k].item()] += 1
+                    if p.argmax(1).eq(y)[k].item():
+                        cor_class[y[k].item()] += 1
+
         else:
             for ((x, y), idx) in loader:
                 clust = test_centroids[idx]
@@ -204,9 +214,19 @@ def accuracy(network, loader, weights, device, test_centroids=None):
                     correct += (p.argmax(1).eq(y).float() * batch_weights).sum().item()
                 total += batch_weights.sum().item()
 
+                for k in range(p.shape[0]):
+                    sum_class[y[k].item()] += 1
+                    if p.argmax(1).eq(y)[k].item():
+                        cor_class[y[k].item()] += 1
+
     network.train()
 
-    return correct / total
+    res = [0.0 for i in range(n_class)]
+    for i in range(n_class):
+        if sum_class[i] != 0:
+            res[i] = cor_class[i] / sum_class[i]
+
+    return correct / total, res
 
 
 class Tee:

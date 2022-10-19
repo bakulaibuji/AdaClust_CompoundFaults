@@ -385,8 +385,10 @@ if __name__ == "__main__":
 
             evals = zip(eval_loader_names, eval_loaders)
             for i, (name, loader) in enumerate(evals):
-                acc = misc.accuracy(algorithm, loader, None, device, test_centroids)
+                acc, detail_acc = misc.accuracy(algorithm, loader, None, device, dataset.num_classes, test_centroids)
                 results[name + '_acc'] = acc
+                for acc_item, idx in enumerate(detail_acc):
+                    results[name + '_acc' + str(acc_item) + '_acc'] = idx
 
             results_keys = sorted(results.keys())
             if results_keys != last_results_keys:
