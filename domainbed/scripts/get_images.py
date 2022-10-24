@@ -10,7 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 
 if __name__ == "__main__":
-    data_segment = 5120 // 5
+    data_segment = 5120 * 2
     sampling_frequency = 5120
     window = 'tukey'
     nperseg = 255
@@ -55,22 +55,25 @@ if __name__ == "__main__":
         for index, fault_type in enumerate(fault_types):
 
             for beg in tqdm(range(0, signals.shape[1] - data_segment, data_segment)):
-                sig = signals.iloc[index][beg: beg + data_segment]
 
-                if max(sig) < 0.01:
-                    continue
+                for k in range(2):
+                    sig = signals.iloc[index * 2 + k][beg: beg + data_segment]
 
-                f, t, Zxx = signal.stft(sig, sampling_frequency, window=window, nperseg=nperseg, noverlap=noverlap)
-                newF = interp2d(t, f, np.abs(Zxx), kind='linear')
-                t_new = np.linspace(0, 1 / sampling_frequency * data_segment, num=x_len)
-                f_new = np.linspace(0, sampling_frequency // 2, num=f_len)
-                Z_new = newF(t_new, f_new)
-                Xn, Yn = np.meshgrid(t_new, f_new)
+                    if max(sig) < 0.01:
+                        continue
 
-                plt.pcolormesh(Xn, Yn, Z_new, shading='auto')
-                plt.axis('off')
-                num = int(beg / (signals.shape[1] / split_num))
-                fault_type_folder = path_out / (name + str(num)) / fault_type
-                plt.savefig(fault_type_folder / (str(beg) + '.png'), dpi=300, bbox_inches='tight', pad_inches=0)
-                plt.clf()
-                plt.close()
+                    f, t, Zxx = signal.stft(sig, sampling_frequency, window=window, nperseg=nperseg, noverlap=noverlap)
+                    newF = interp2d(t, f, np.abs(Zxx), kind='linear')
+                    t_new = np.linspace(0, 1 / sampling_frequency * data_segment, num=x_len)
+                    f_new = np.linspace(0, sampling_frequency // 2, num=f_len)
+                    Z_new = newF(t_new, f_new)
+                    Xn, Yn = np.meshgrid(t_new, f_new)
+
+                    plt.pcolormesh(Xn, Yn, Z_new, shading='auto')
+                    plt.axis('off')
+                    num = int(beg / (signals.shape[1] / split_num))
+                    fault_type_folder = path_out / (name + str(num)) / fault_type
+                    plt.savefig(fault_type_folder / (str(beg) + '_' + str(k) + '.png'), dpi=300, bbox_inches='tight',
+                                pad_inches=0)
+                    plt.clf()
+                    plt.close()
