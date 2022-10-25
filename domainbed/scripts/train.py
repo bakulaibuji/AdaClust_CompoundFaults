@@ -29,6 +29,7 @@ def getParameters():
     parser.add_argument('--data_dir', type=str, default="Not Setting")
     parser.add_argument('--output_dir', type=str, default="train_output")
     parser.add_argument('--num_workers', type=int, default=2, help='Number of workers')
+    parser.add_argument('--gpu_id', type=str, default="0", help='visible gpu device id')
 
     # ------------- Parameters for Task -----------------#
     parser.add_argument('--dataset', type=str, default="CompoundFaults")
@@ -91,6 +92,7 @@ def getParameters():
         else:
             raise Exception("Unknown computer host, unable to set data directory")
 
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
     if torch.cuda.is_available():
         args.device = "cuda"
     else:

@@ -29,6 +29,7 @@ if __name__ == "__main__":
 
     files = [f for f in path_orig.glob('*') if not f.is_dir()]
     fault_types = ['正常', '裂纹', '断齿', '缺齿', '磨损', '点蚀', '磨损+点蚀', '裂纹+缺齿', '裂纹+断齿']
+    # 正确的应该是 fault_types = ['正常', '裂纹', '断齿', '缺齿', '磨损', '点蚀', '裂纹+磨损', '裂纹+缺齿', '断齿+点蚀']
 
     split_num = 3
 
