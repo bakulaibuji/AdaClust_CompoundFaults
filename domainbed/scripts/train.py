@@ -42,6 +42,8 @@ def getParameters():
                         default=["B1H", "B1L", "B2H", "B2L", "B3H", "B3L", "B4H", "B4L"])
 
     # ------------- HyperParameters -----------------#
+    parser.add_argument('--pca_dim', type=int, help='pca dimension')
+    parser.add_argument('--offset', type=int, help='start of features')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='batch size')
     parser.add_argument('--hparams_json', type=str,
@@ -110,6 +112,10 @@ def getParameters():
         args.hparams = hparams_registry.random_hparams(args.algorithm, args.dataset,
                                                        misc.seed_hash(args.hparams_seed, args.trial_seed))
     args.hparams = get_hparam(args.hparams, args.hparams_seed)  # To fix hparams for each hparams_seed, else comment out
+    if args.pca_dim:
+        args.hparams['pca_dim'] = args.pca_dim
+    if args.offset:
+        args.hparams['offset'] = args.offset
     if args.hparams_json:
         args.hparams.update(json.loads(args.hparams_json))
 
@@ -310,17 +316,20 @@ if __name__ == "__main__":
             train_features2 = train_features  # if no PCA
         else:
             train_features_pca = np.asarray(train_features)
-            pca = PCA(hparams["pca_dim"]) # pca_dim = 512 (PCA的长度)
-            exp_var = pca.fit(train_features, hparams["offset"]) # offset = 8 (PCAd的起始点)
-            train_features2 = pca.apply(torch.from_numpy(train_features_pca)).detach().numpy() # train_features2 = {ndarray: (N, 512)}
+            pca = PCA(hparams["pca_dim"])  # pca_dim = 512 (PCA的长度)
+            exp_var = pca.fit(train_features, hparams["offset"])  # offset = 8 (PCAd的起始点)
+            train_features2 = pca.apply(
+                torch.from_numpy(train_features_pca)).detach().numpy()  # train_features2 = {ndarray: (N, 512)}
             row_sums = np.linalg.norm(train_features2, axis=1)
             train_features2 = train_features2 / row_sums[:, np.newaxis]
 
         clustering = Faiss_Clustering(train_features2.copy(order="C"), num_clusters)
         clustering.fit()
-        cluster_labels_train = get_cluster_labels(clustering, train_features2) # cluster_labels_train = {list: N}
-        images_lists = get_images_list(num_clusters, len_train_data, cluster_labels_train) # image_lists = {list: num_clusters}
-        train_centroids = torch.empty((len_train_data, train_features.shape[1])) # train_centroids = {ndarray: (N, 2048)}
+        cluster_labels_train = get_cluster_labels(clustering, train_features2)  # cluster_labels_train = {list: N}
+        images_lists = get_images_list(num_clusters, len_train_data,
+                                       cluster_labels_train)  # image_lists = {list: num_clusters}
+        train_centroids = torch.empty(
+            (len_train_data, train_features.shape[1]))  # train_centroids = {ndarray: (N, 2048)}
 
         # Get the centroid of the images that share the same cluster in PCA space
         for i, indx in enumerate(images_lists):
