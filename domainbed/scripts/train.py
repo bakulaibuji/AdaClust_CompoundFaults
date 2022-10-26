@@ -295,7 +295,8 @@ if __name__ == "__main__":
     def return_centroids(algorithm, step):
 
         with torch.no_grad():
-            # Get features and labels
+            # Get features and labels # train_features = {ndarray: (N(12573), 2048), 2048 is the length of feature
+            # extracted from CNN}
             train_features, train_labels = get_features(train_loader, algorithm, len_train_data, args.batch_size,
                                                         device)
             test_features, test_labels = get_features(test_loader, algorithm, len_test_data, args.batch_size, device)
@@ -307,17 +308,17 @@ if __name__ == "__main__":
             train_features2 = train_features  # if no PCA
         else:
             train_features_pca = np.asarray(train_features)
-            pca = PCA(hparams["pca_dim"])
-            exp_var = pca.fit(train_features, hparams["offset"])
-            train_features2 = pca.apply(torch.from_numpy(train_features_pca)).detach().numpy()
+            pca = PCA(hparams["pca_dim"]) # pca_dim = 512 (PCA的长度)
+            exp_var = pca.fit(train_features, hparams["offset"]) # offset = 8 (PCAd的起始点)
+            train_features2 = pca.apply(torch.from_numpy(train_features_pca)).detach().numpy() # train_features2 = {ndarray: (N, 512)}
             row_sums = np.linalg.norm(train_features2, axis=1)
             train_features2 = train_features2 / row_sums[:, np.newaxis]
 
         clustering = Faiss_Clustering(train_features2.copy(order="C"), num_clusters)
         clustering.fit()
-        cluster_labels_train = get_cluster_labels(clustering, train_features2)
-        images_lists = get_images_list(num_clusters, len_train_data, cluster_labels_train)
-        train_centroids = torch.empty((len_train_data, train_features.shape[1]))
+        cluster_labels_train = get_cluster_labels(clustering, train_features2) # cluster_labels_train = {list: N}
+        images_lists = get_images_list(num_clusters, len_train_data, cluster_labels_train) # image_lists = {list: num_clusters}
+        train_centroids = torch.empty((len_train_data, train_features.shape[1])) # train_centroids = {ndarray: (N, 2048)}
 
         # Get the centroid of the images that share the same cluster in PCA space
         for i, indx in enumerate(images_lists):
