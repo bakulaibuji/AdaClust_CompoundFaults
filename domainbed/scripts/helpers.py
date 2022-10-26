@@ -22,6 +22,10 @@ def get_features(data_loader, model, N, batch_size, device):
     Returns: features, labels, idx
     """
     model.train(False)
+    # data = {Tensor: {16, 3,224, 224}}
+    # label = {Tensor: (16,)}
+    # features = {ndarray: (16, 2048)}
+    # features_ = {ndarray: {N(len of train_data), 2048}}
     for i, ((data, labels), idx) in enumerate(data_loader):
         features = model.featurizer(data.to(device)).detach().cpu().numpy()  # get features
         features = np.asarray(features.reshape(features.shape[0], -1), dtype=np.float32)

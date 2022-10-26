@@ -146,7 +146,7 @@ class AdaClust(Algorithm):
         return {"loss": loss.item()}
 
     def predict(self, x, clust):
-        out = self.featurizer(x)
+        out = self.featurizer(x) # out = {Tensor: (8, 2048)}, clust = {Tensor: (8, 2048)}, x = {Tensor: (8, 3, 224, 224)}
         out = torch.cat([out, clust], dim=1)
         out = self.classifier(out)
         return out

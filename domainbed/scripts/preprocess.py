@@ -11,7 +11,7 @@ class PCA:
         self.n_components = n_components
 
     def fit(self, X, offset, whitening=True):
-        mean = X.mean(axis=0)
+        mean = X.mean(axis=0) # X = {ndarray: (N, 2048)}
         X -= mean
         self.mean = torch.from_numpy(mean).view(1, -1)
         Xcov = np.dot(X.T, X)
